@@ -1,0 +1,43 @@
+# Environments
+venv/
+env/
+.env
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Project Specific Data & Databases
+data/sentiment_data.csv
+*.db
+*.db-shm
+*.db-wal
+*.sqlite3
+
+# Downloaded Models
+local_model/
+quantized_model/
+
+# OS & IDE
+.vscode/
+.idea/
+.DS_Store
+__MACOSX/

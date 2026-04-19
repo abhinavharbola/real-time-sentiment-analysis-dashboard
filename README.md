@@ -1,155 +1,199 @@
-# Real-Time Sentiment Dashboard
+# Real-Time Sentiment Analytics System
 
-This project implements a **real-time sentiment analysis system** with an **end-to-end data pipeline** that processes simulated social media posts and visualizes live sentiment analytics on a **Streamlit dashboard**.
+A high-throughput, end-to-end sentiment analysis pipeline built with **FastAPI**, **DistilBERT**, and **Streamlit**. The system processes concurrent text streams, persists predictions to an async SQLite database, and surfaces live KPIs on an auto-refreshing dashboard.
 
-The entire architecture is built in **Python**, integrating **FastAPI**, **Hugging Face Transformers**, **SQLite**, and **Streamlit**, no cloud services or GPU required.
-
----
-
-## System Overview
-
-| Component | Purpose | Technology |
-|------------|----------|-------------|
-| **Data Ingestion** | Simulates a live tweet stream | FastAPI + Custom Feeder |
-| **ML Modeling** | Sentiment analysis | Hugging Face Transformers |
-| **Data Storage** | Persistent local storage | SQLite |
-| **Dashboard** | Real-time visualization | Streamlit |
+<p align="center">
+  <img src="images/dashboard.png" width="1000" alt="Sentiment Analysis Dashboard"/>
+</p>
 
 ---
 
-## Project Architecture
+## Architecture Overview
 
-This system is composed of **three independent Python scripts**, each running in its own terminal.
+```
+pipeline/data_feeder.py
+        |
+        | HTTP POST /predict (50 concurrent batches)
+        v
+backend/main_api.py (FastAPI + DistilBERT INT8)
+        |
+        | async background task
+        v
+backend/database.py (aiosqlite)
+        |
+        | SQL query (temporal window)
+        v
+utils/metrics.py → app.py (Streamlit Dashboard)
+```
 
-```bash
-.
-├── sentiment_data.csv          # Dataset (Sentiment140 - renamed)
-├── backend_api.py              # FastAPI backend for processing tweets
-├── data_feeder.py              # Simulated tweet stream sender
-├── sentiment_dashboard.py      # Streamlit dashboard app
-├── sentiment.db                # SQLite database (auto-created)
-├── requirements.txt            # Python dependencies
-└── README.md                   # Project documentation
+These three processes run in parallel and are orchestrated by `run.sh`.
+
+---
+
+## Features
+ 
+- Batch inference on up to 100 texts per request via a locally quantized DistilBERT model (INT8, no retraining)
+- Non-blocking async database writes using `aiosqlite` background tasks
+- Concurrent load simulation firing 50 async requests/cycle via `aiohttp`
+- Live KPI dashboard with configurable temporal windows (1h / 6h / 24h) and refresh rate
+- Rule-based alert engine for sentiment spikes, latency degradation, and low-confidence predictions
+- `/health` and `/metrics` endpoints for uptime and inference monitoring
+---
+
+## Project Structure
+
+```
+├── backend/
+|   ├── database.py          # Async SQLite init, batch inserts, metric queries
+|   ├── error_handlers.py    # FastAPI global exception handlers (422, 500)
+|   └── main_api.py          # Core API: DistilBERT inference, /predict, /health, /metrics
+|
+├── data/
+|   └── sentiment_data.csv   # Source dataset used by the data feeder
+|
+├── models/
+|   └── optimize.py          # Model optimization utilities
+|
+├── pipeline/
+|   └── data_feeder.py       # Async concurrent HTTP load simulator
+|
+├── utils/
+|   ├── alerts.py            # Real-time threshold-based alert engine
+|   └── metrics.py           # KPI calculation and temporal data fetching
+|
+├── app.py                   # Streamlit dashboard entry point
+├── requirements.txt
+└── run.sh
 ```
 
 ---
 
-## How It Works
+## Dashboard
 
-### `data_feeder.py` : The Stream Simulator
-- Reads from the **Sentiment140** dataset.
-- Randomly selects a tweet every **1-3 seconds**.
-- Sends it via an HTTP POST request to the **FastAPI backend**.
+The Streamlit dashboard auto-refreshes at a configurable interval (1-10 seconds) and displays:
 
-### `backend_api.py` : The Processing Engine
-- A **FastAPI** server that listens for incoming tweets.
-- Loads a **Hugging Face sentiment model**:  
-  `distilbert-base-uncased-finetuned-sst-2-english`
-- Processes each tweet → predicts **Positive / Negative** sentiment + confidence score.
-- Saves results to **SQLite (sentiment.db)** with timestamp.
+| Metric | Description |
+|---|---|
+| Total Processed | Cumulative records in the selected time window |
+| Positive Sentiment | Percentage of POSITIVE predictions |
+| Negative Sentiment | Percentage of NEGATIVE predictions |
+| Avg Latency | Mean per-record inference time in milliseconds |
+| Avg Confidence | Mean model confidence score (0-1) |
+| Throughput | Requests processed per minute |
 
-### `sentiment_dashboard.py` : The Interactive Dashboard
-- A **Streamlit** web application connected to `sentiment.db`.
-- Auto-refreshes every **3 seconds** to display live updates.
-- Shows:
-  - Key Performance Indicators (KPIs)
-  - Line and bar charts
-  - Word clouds
-  - Live feed of latest tweets
+A live activity stream table shows the 15 most recent predictions with full text, sentiment label, confidence, and latency.
 
 ---
 
-## Prerequisites
+## Setup
 
-Ensure all scripts and the `requirements.txt` file are in the same directory.
+### 1. Download the model
 
-### Install Dependencies
+The API expects a locally saved DistilBERT sentiment model at `./local_model/`. To download and save it:
+
+```python
+pyhton .\models\optimize.py
+```
+
+### 2. Download the dependencies
+
+> PyTorch is listed as a comment in `requirements.txt`. For setup having GPU, uncomment the PyTorch keyword.
+
+For CPU-only setup:
+
+```bash
+pip install torch torchvision torchaudio --index-url [https://download.pytorch.org/whl/cpu](https://download.pytorch.org/whl/cpu)
+```
+
+Then:
+
 ```bash
 pip install -r requirements.txt
 ```
 
-### Download the Dataset
-Download the **Sentiment140 dataset** from [Kaggle](https://www.kaggle.com/datasets/kazanova/sentiment140) or [Stanford’s page](http://help.sentiment140.com/for-students).
+### 3. Prepare dataset
 
-Rename the downloaded file to:
+Place your input CSV at `data/sentiment_data.csv`. The data feeder reads text from the last column of the file. The included dataset is a Twitter sentiment corpus.
 
-```bash
-sentiment_data.csv
-```
-
-and place it in the project directory.
-
----
-
-## Step-by-Step Execution
-
-You’ll need **three terminals** to run the complete system.
-
-### Terminal 1 : Run the Backend API
-
-Start the FastAPI server:
+### 4. Launch the system through Git Bash
 
 ```bash
-uvicorn backend_api:app --reload
+chmod +x run.sh
+./run.sh
 ```
 
-Expected output:
+`run.sh` starts all three processes in sequence:
+
+`FastAPI backend` → `Async data feeder` → `Streamlit dashboard`
+
+Stopping the dashboard (Ctrl+C) will also terminate the backend and feeder processes via the `EXIT` trap.
+
+---
+
+## API Reference
+
+#### `POST /predict`
+
+Run batch sentiment inference.
+
+**Request body:**
+
+```json
+{
+  "texts": ["I love this!", "This is terrible."]
+}
 ```
-INFO:     Uvicorn running on http://127.0.0.1:8000
+
+**Response:**
+
+```json
+{
+  "batch_latency_ms": 45.2,
+  "results": [
+    { "sentiment": "POSITIVE", "confidence": 0.9987 },
+    { "sentiment": "NEGATIVE", "confidence": 0.9954 }
+  ]
+}
+```
+
+#### `GET /health`
+
+```json
+{
+  "status": "healthy",
+  "uptime_seconds": 3612.4,
+  "model_loaded": true
+}
+```
+
+#### `GET /metrics`
+
+```json
+{
+  "uptime_hours": 1.0,
+  "total_processed": 3280,
+  "average_inference_latency_ms": 31.25
+}
 ```
 
 ---
 
-### Terminal 2 : Run the Data Feeder
+## Alert Thresholds
 
-In a new terminal, run:
+Alerts are evaluated against the most recent 100 records on every dashboard refresh.
 
-```bash
-python data_feeder.py
-```
-
-Example logs:
-```
-Sending tweet: "Just watched an amazing movie!"
--> Response: 200
-```
-
-Leave this terminal running.
+| Alert Level | Condition |
+|---|---|
+| ERROR | Negative sentiment ratio > 70% for last 100 texts |
+| WARNING | Average inference latency > 200ms |
+| NOTICE | More than 20 predictions with confidence < 0.50 |
 
 ---
 
-### Terminal 3 : Run the Streamlit Dashboard
+## Performance
 
-In the third terminal, start the dashboard:
+Tested on CPU with INT8 dynamic quantization applied at startup:
 
-```bash
-streamlit run sentiment_dashboard.py
-```
-
-The dashboard will open automatically in your default browser at:
-
-```
-http://localhost:8501
-```
-
-At first, it will show **“Waiting for data...”**, within 10–15 seconds, it will begin displaying **live sentiment analytics** as tweets flow in.
-
----
-
-## Core Technologies
-
-| Layer | Tool / Library |
-|-------|----------------|
-| **API** | FastAPI |
-| **Model** | Hugging Face Transformers (DistilBERT) |
-| **Database** | SQLite |
-| **Dashboard** | Streamlit |
-| **Language** | Python 3.9+ |
-
----
-
-## Author
-Developed by **Abhinav Harbola**  
-
-Data Engineering | NLP | Real-Time Systems
-
+- Average inference latency: ~31ms per record
+- Throughput: ~1,069 requests/min (50 concurrent clients)
+- Model confidence: avg ~0.961 across Twitter sentiment dataset

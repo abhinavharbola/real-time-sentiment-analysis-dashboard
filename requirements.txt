@@ -1,10 +1,9 @@
 fastapi
 uvicorn
-sqlalchemy
+pydantic
 transformers
-torch
+aiosqlite
+aiohttp
 pandas
-requests
 streamlit
-wordcloud
-matplotlib
+# torch
