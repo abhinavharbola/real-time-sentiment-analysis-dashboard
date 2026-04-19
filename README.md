@@ -1,6 +1,7 @@
 # Real-Time Sentiment Analytics System
 
-A high-throughput, end-to-end sentiment analysis pipeline built with **FastAPI**, **DistilBERT**, and **Streamlit**. The system processes concurrent text streams, persists predictions to an async SQLite database, and surfaces live KPIs on an auto-refreshing dashboard.
+A high-throughput, end-to-end sentiment analysis pipeline built with **FastAPI**, **DistilBERT**, and **Streamlit**.
+The system processes concurrent text streams, persists predictions to an async SQLite database, and surfaces live KPIs on an auto-refreshing dashboard.
 
 <p align="center">
   <img src="images/dashboard.png" width="1000" alt="Sentiment Analysis Dashboard"/>
