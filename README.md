@@ -104,7 +104,7 @@ pyhton .\models\optimize.py
 For CPU-only setup:
 
 ```bash
-pip install torch torchvision torchaudio --index-url [https://download.pytorch.org/whl/cpu](https://download.pytorch.org/whl/cpu)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 ```
 
 Then:
